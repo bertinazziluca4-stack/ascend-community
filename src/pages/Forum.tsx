@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { CategoryCard } from "@/components/forum/CategoryCard";
@@ -18,144 +19,172 @@ import {
   List,
   Flame,
   Clock,
-  TrendingUp
+  TrendingUp,
+  Plus
 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
-const categories = [
-  {
-    icon: Beef,
-    name: "Nutrition & Diet",
-    description: "Carnivore, animal-based, ancestral nutrition, and optimal dietary strategies for performance and health.",
-    threads: 12400,
-    posts: 89200,
-    lastPost: { title: "Raw milk sources in EU?", author: "MeatEater", time: "2m ago" },
-    color: "from-red-500/20 to-orange-500/20",
+interface Category {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  icon: string | null;
+  color: string | null;
+  thread_count: number | null;
+  post_count: number | null;
+}
+
+interface Profile {
+  username: string;
+  display_name: string | null;
+}
+
+interface Thread {
+  id: string;
+  title: string;
+  content: string;
+  author_id: string;
+  category_id: string;
+  is_pinned: boolean | null;
+  is_locked: boolean | null;
+  upvotes: number | null;
+  downvotes: number | null;
+  view_count: number | null;
+  reply_count: number | null;
+  tags: string[] | null;
+  created_at: string;
+  profiles?: Profile | null;
+  categories?: {
+    name: string;
+    color: string | null;
+  } | null;
+}
+
+const iconMap: Record<string, React.ElementType> = {
+  beef: Beef,
+  dumbbell: Dumbbell,
+  sparkles: Sparkles,
+  flask: FlaskConical,
+  "message-circle": MessageCircle,
+};
+
+const colorMap: Record<string, { gradient: string; iconColor: string; badge: string }> = {
+  red: { 
+    gradient: "from-red-500/20 to-orange-500/20", 
     iconColor: "text-red-400",
-    slug: "nutrition",
+    badge: "bg-red-500/20 text-red-400"
   },
-  {
-    icon: Dumbbell,
-    name: "Training & Gym",
-    description: "Strength training, hypertrophy, programming, and everything related to building muscle and performance.",
-    threads: 18200,
-    posts: 124500,
-    lastPost: { title: "5x5 vs PPL for naturals", author: "IronMike", time: "5m ago" },
-    color: "from-blue-500/20 to-cyan-500/20",
+  blue: { 
+    gradient: "from-blue-500/20 to-cyan-500/20", 
     iconColor: "text-blue-400",
-    slug: "training",
+    badge: "bg-blue-500/20 text-blue-400"
   },
-  {
-    icon: Sparkles,
-    name: "Looksmaxxing",
-    description: "Aesthetic optimization, appearance enhancement, skincare, and self-improvement strategies.",
-    threads: 8700,
-    posts: 56300,
-    lastPost: { title: "Mewing results 1 year", author: "JawlineKing", time: "12m ago" },
-    color: "from-purple-500/20 to-pink-500/20",
+  purple: { 
+    gradient: "from-purple-500/20 to-pink-500/20", 
     iconColor: "text-purple-400",
-    slug: "looksmaxxing",
+    badge: "bg-purple-500/20 text-purple-400"
   },
-  {
-    icon: FlaskConical,
-    name: "PEDs Discussion",
-    description: "Educational harm-reduction discussions only. Research, protocols, and health monitoring.",
-    threads: 6300,
-    posts: 41200,
-    lastPost: { title: "Bloodwork interpretation help", author: "ResearchChad", time: "18m ago" },
-    color: "from-yellow-500/20 to-amber-500/20",
+  yellow: { 
+    gradient: "from-yellow-500/20 to-amber-500/20", 
     iconColor: "text-yellow-400",
-    slug: "peds",
+    badge: "bg-yellow-500/20 text-yellow-400"
   },
-  {
-    icon: MessageCircle,
-    name: "General Discussion",
-    description: "Off-topic conversations, lifestyle, motivation, success stories, and community chat.",
-    threads: 24100,
-    posts: 198700,
-    lastPost: { title: "Morning routine optimization", author: "EarlyRiser", time: "1m ago" },
-    color: "from-green-500/20 to-emerald-500/20",
+  green: { 
+    gradient: "from-green-500/20 to-emerald-500/20", 
     iconColor: "text-green-400",
-    slug: "general",
+    badge: "bg-green-500/20 text-green-400"
   },
-];
+};
 
-const recentThreads = [
-  {
-    id: "1",
-    title: "My 90-day carnivore transformation - before/after + bloodwork",
-    excerpt: "Started this journey skeptical, now I'm a full convert. Here's everything I learned, mistakes I made, and the incredible results...",
-    author: { name: "MeatKing", badge: "Elite" },
-    category: "Nutrition",
-    categoryColor: "bg-red-500/20 text-red-400",
-    stats: { replies: 234, views: 12400, upvotes: 847 },
-    createdAt: "2h ago",
-    isHot: true,
-    tags: ["carnivore", "transformation", "bloodwork"],
-  },
-  {
-    id: "2",
-    title: "[GUIDE] Complete beginner's hypertrophy program - science-based approach",
-    excerpt: "After coaching 500+ clients, here's the program I wish I had when I started. Full periodization, exercise selection, and progression schemes...",
-    author: { name: "DrStrength", badge: "Expert" },
-    category: "Training",
-    categoryColor: "bg-blue-500/20 text-blue-400",
-    stats: { replies: 456, views: 28900, upvotes: 1203 },
-    createdAt: "5h ago",
-    isPinned: true,
-    tags: ["guide", "hypertrophy", "beginners"],
-  },
-  {
-    id: "3",
-    title: "Sunlight protocol for testosterone optimization - my n=1 experiment",
-    excerpt: "Tracked my levels for 6 months while implementing strategic sun exposure. The results are fascinating and counterintuitive...",
-    author: { name: "SunBro", badge: "Veteran" },
-    category: "General",
-    categoryColor: "bg-green-500/20 text-green-400",
-    stats: { replies: 89, views: 4500, upvotes: 234 },
-    createdAt: "8h ago",
-    tags: ["testosterone", "sunlight", "optimization"],
-  },
-  {
-    id: "4",
-    title: "Comprehensive guide to bone broth - recipes, benefits, and sourcing",
-    excerpt: "Everything you need to know about making the perfect bone broth. From sourcing quality bones to achieving that perfect gel consistency...",
-    author: { name: "ChefPrimal" },
-    category: "Nutrition",
-    categoryColor: "bg-red-500/20 text-red-400",
-    stats: { replies: 67, views: 3200, upvotes: 178 },
-    createdAt: "12h ago",
-    tags: ["bonebroth", "recipes", "nutrition"],
-  },
-  {
-    id: "5",
-    title: "Cold exposure routine - from skeptic to daily practitioner",
-    excerpt: "I thought cold showers were just bro science. After 3 months of consistent practice, here's what actually changed...",
-    author: { name: "IceMan" },
-    category: "General",
-    categoryColor: "bg-green-500/20 text-green-400",
-    stats: { replies: 123, views: 6700, upvotes: 312 },
-    createdAt: "1d ago",
-    isHot: true,
-    tags: ["coldexposure", "biohacking", "hormesis"],
-  },
-  {
-    id: "6",
-    title: "Sleep optimization stack that actually works (no supplements)",
-    excerpt: "After years of trying everything, these are the free behavioral changes that made the biggest difference to my sleep quality...",
-    author: { name: "SleepGuru", badge: "Expert" },
-    category: "General",
-    categoryColor: "bg-green-500/20 text-green-400",
-    stats: { replies: 201, views: 9800, upvotes: 567 },
-    createdAt: "1d ago",
-    tags: ["sleep", "optimization", "health"],
-  },
-];
+function formatTimeAgo(dateString: string): string {
+  const date = new Date(dateString);
+  const now = new Date();
+  const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+  
+  if (seconds < 60) return "just now";
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+  if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
+  return date.toLocaleDateString();
+}
 
 export default function Forum() {
   const [viewMode, setViewMode] = useState<"grid" | "list">("list");
   const [activeTab, setActiveTab] = useState("latest");
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [threads, setThreads] = useState<Thread[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    fetchCategories();
+    fetchThreads();
+  }, [activeTab]);
+
+  const fetchCategories = async () => {
+    const { data } = await supabase
+      .from("categories")
+      .select("*")
+      .order("name");
+    
+    if (data) {
+      setCategories(data);
+    }
+  };
+
+  const fetchThreads = async () => {
+    setLoading(true);
+    
+    let query = supabase
+      .from("threads")
+      .select(`
+        *,
+        categories:category_id (name, color)
+      `)
+      .limit(20);
+
+    if (activeTab === "latest") {
+      query = query.order("created_at", { ascending: false });
+    } else if (activeTab === "hot") {
+      query = query.order("upvotes", { ascending: false });
+    } else if (activeTab === "top") {
+      query = query.order("view_count", { ascending: false });
+    }
+
+    const { data: threadsData } = await query;
+    
+    if (threadsData) {
+      // Fetch profiles for each thread author
+      const authorIds = [...new Set(threadsData.map(t => t.author_id))];
+      const { data: profilesData } = await supabase
+        .from("profiles")
+        .select("user_id, username, display_name")
+        .in("user_id", authorIds);
+
+      const profilesMap = new Map(profilesData?.map(p => [p.user_id, p]) || []);
+      
+      const threadsWithProfiles = threadsData.map(thread => ({
+        ...thread,
+        profiles: profilesMap.get(thread.author_id) || null,
+      }));
+      
+      setThreads(threadsWithProfiles as Thread[]);
+    }
+    setLoading(false);
+  };
+
+  const handleNewThread = () => {
+    if (!user) {
+      navigate("/auth");
+    } else {
+      navigate("/forum/new");
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -168,14 +197,25 @@ export default function Forum() {
           <div className="absolute inset-0 bg-gradient-to-b from-transparent to-background" />
           
           <div className="container mx-auto px-4 sm:px-6 lg:px-8 relative">
-            <div className="max-w-3xl">
-              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold mb-4">
-                <span className="text-foreground">Community </span>
-                <span className="text-gradient">Forum</span>
-              </h1>
-              <p className="text-muted-foreground text-lg">
-                Join the discussion with thousands of like-minded individuals pursuing physical excellence.
-              </p>
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+              <div>
+                <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold mb-4">
+                  <span className="text-foreground">Community </span>
+                  <span className="text-gradient">Forum</span>
+                </h1>
+                <p className="text-muted-foreground text-lg">
+                  Join the discussion with thousands of like-minded individuals pursuing physical excellence.
+                </p>
+              </div>
+              <Button 
+                variant="hero" 
+                size="lg" 
+                className="w-fit"
+                onClick={handleNewThread}
+              >
+                <Plus className="w-5 h-5" />
+                New Thread
+              </Button>
             </div>
           </div>
         </section>
@@ -185,9 +225,24 @@ export default function Forum() {
           <div className="container mx-auto px-4 sm:px-6 lg:px-8">
             <h2 className="text-2xl font-bold text-foreground mb-6">Categories</h2>
             <div className="grid gap-4">
-              {categories.map((category) => (
-                <CategoryCard key={category.slug} {...category} />
-              ))}
+              {categories.map((category) => {
+                const colors = colorMap[category.color || "blue"];
+                const Icon = iconMap[category.icon || "message-circle"] || MessageCircle;
+                
+                return (
+                  <CategoryCard 
+                    key={category.id}
+                    icon={Icon}
+                    name={category.name}
+                    description={category.description || ""}
+                    threads={category.thread_count || 0}
+                    posts={category.post_count || 0}
+                    color={colors.gradient}
+                    iconColor={colors.iconColor}
+                    slug={category.slug}
+                  />
+                );
+              })}
             </div>
           </div>
         </section>
@@ -254,17 +309,60 @@ export default function Forum() {
 
                 {/* Thread List */}
                 <div className="space-y-4">
-                  {recentThreads.map((thread) => (
-                    <ThreadCard key={thread.id} {...thread} />
-                  ))}
+                  {loading ? (
+                    <div className="text-center py-12">
+                      <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+                      <p className="text-muted-foreground">Loading threads...</p>
+                    </div>
+                  ) : threads.length > 0 ? (
+                    threads.map((thread) => {
+                      const categoryColor = colorMap[thread.categories?.color || "blue"];
+                      
+                      return (
+                        <ThreadCard 
+                          key={thread.id}
+                          id={thread.id}
+                          title={thread.title}
+                          excerpt={thread.content.substring(0, 200) + (thread.content.length > 200 ? "..." : "")}
+                          author={{
+                            name: thread.profiles?.display_name || thread.profiles?.username || "Unknown",
+                          }}
+                          category={thread.categories?.name || "General"}
+                          categoryColor={categoryColor.badge}
+                          stats={{
+                            replies: thread.reply_count || 0,
+                            views: thread.view_count || 0,
+                            upvotes: (thread.upvotes || 0) - (thread.downvotes || 0),
+                          }}
+                          createdAt={formatTimeAgo(thread.created_at)}
+                          isPinned={thread.is_pinned || false}
+                          isLocked={thread.is_locked || false}
+                          isHot={(thread.upvotes || 0) > 10}
+                          tags={thread.tags || []}
+                        />
+                      );
+                    })
+                  ) : (
+                    <div className="text-center py-16 glass-card">
+                      <MessageCircle className="w-16 h-16 text-muted-foreground/50 mx-auto mb-4" />
+                      <h3 className="text-xl font-semibold text-foreground mb-2">No threads yet</h3>
+                      <p className="text-muted-foreground mb-6">Be the first to start a discussion!</p>
+                      <Button variant="hero" onClick={handleNewThread}>
+                        <Plus className="w-5 h-5" />
+                        Create First Thread
+                      </Button>
+                    </div>
+                  )}
                 </div>
 
                 {/* Load More */}
-                <div className="mt-8 text-center">
-                  <Button variant="outline" size="lg">
-                    Load More Threads
-                  </Button>
-                </div>
+                {threads.length > 0 && (
+                  <div className="mt-8 text-center">
+                    <Button variant="outline" size="lg">
+                      Load More Threads
+                    </Button>
+                  </div>
+                )}
               </div>
 
               {/* Sidebar */}
