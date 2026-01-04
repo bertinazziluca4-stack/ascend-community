@@ -1,7 +1,8 @@
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { TrendingUp, Users, Award, Bell, Bookmark, Settings, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { useAuth } from "@/contexts/AuthContext";
 
 const trendingTopics = [
   { tag: "carnivore30", posts: 234 },
@@ -20,10 +21,21 @@ const onlineMembers = [
 ];
 
 export function ForumSidebar() {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+
+  const handleNewThread = () => {
+    if (!user) {
+      navigate("/auth");
+    } else {
+      navigate("/forum/new");
+    }
+  };
+
   return (
     <aside className="w-full lg:w-80 shrink-0 space-y-6">
       {/* New Thread Button */}
-      <Button variant="hero" className="w-full group">
+      <Button variant="hero" className="w-full group" onClick={handleNewThread}>
         <Plus className="w-5 h-5" />
         New Thread
       </Button>
@@ -34,15 +46,19 @@ export function ForumSidebar() {
         <nav className="space-y-1">
           {[
             { icon: TrendingUp, label: "Trending", href: "#" },
-            { icon: Bell, label: "Notifications", href: "#", badge: 3 },
+            { icon: Bell, label: "Notifications", href: "#", badge: user ? 3 : undefined },
             { icon: Bookmark, label: "Bookmarks", href: "#" },
             { icon: Award, label: "Leaderboard", href: "#" },
             { icon: Settings, label: "Settings", href: "#" },
           ].map((item) => (
-            <Link
+            <button
               key={item.label}
-              to={item.href}
-              className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+              onClick={() => {
+                if (!user && (item.label === "Notifications" || item.label === "Bookmarks" || item.label === "Settings")) {
+                  navigate("/auth");
+                }
+              }}
+              className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors w-full text-left"
             >
               <item.icon className="w-5 h-5" />
               <span className="flex-1">{item.label}</span>
@@ -51,7 +67,7 @@ export function ForumSidebar() {
                   {item.badge}
                 </span>
               )}
-            </Link>
+            </button>
           ))}
         </nav>
       </div>
@@ -64,10 +80,9 @@ export function ForumSidebar() {
         </div>
         <div className="space-y-2">
           {trendingTopics.map((topic, index) => (
-            <Link
+            <button
               key={topic.tag}
-              to={`/forum/tag/${topic.tag}`}
-              className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-secondary transition-colors group"
+              className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-secondary transition-colors group w-full text-left"
             >
               <span className="text-muted-foreground text-sm font-medium w-5">
                 {index + 1}
@@ -78,7 +93,7 @@ export function ForumSidebar() {
               <span className="text-xs text-muted-foreground">
                 {topic.posts} posts
               </span>
-            </Link>
+            </button>
           ))}
         </div>
       </div>
